@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scam Tracker
 
-## Getting Started
+Sistema de redirecionamento com rastreamento de acessos, perfis anonimizados e painel administrativo protegido por senha. Indicado para campanhas em que o usuário é redirecionado para URLs específicas (ex.: páginas de denúncia ou suporte) com registro de acessos e histórico por ID anônimo.
 
-First, run the development server:
+## Funcionalidades
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Redirect invisível**: Acesso a `/r/[slug]` resulta em redirecionamento HTTP 302 para a URL configurada (ou para o Google se a campanha estiver fechada ou o slug não existir). Não há página intermediária visível.
+- **Tracker**: Cada acesso registra IP, user-agent, referer e um ID anônimo (cookie `uid`), permitindo histórico por “perfil” sem dados pessoais.
+- **Campanhas**: Gerenciador de campanhas com slug customizado, URL de destino, metadados (título, descrição, OG image) e status (aberta/fechada). Campanha fechada ainda registra o acesso mas redireciona para o Google.
+- **404**: Slugs inexistentes são tratados como “campanha 404”: o acesso é registrado e o usuário é redirecionado para o Google.
+- **Admin**: Área restrita por senha única (hash no banco). Dashboard com totais, relatórios por campanha e por ID anônimo.
+
+## Requisitos
+
+- Node.js 18+
+- Conta [Neon](https://neon.tech) (ou banco Postgres com connection string)
+
+## Configuração
+
+1. Clone o repositório e instale as dependências:
+
+   ```bash
+   npm install
+   ```
+
+2. **Banco Neon**: Crie um projeto em [Neon](https://console.neon.tech) (ou use o banco já criado). No painel, copie:
+   - **POSTGRES_PRISMA_URL** (recomendado) ou a URL **“Recommended for most uses”** (pooled).
+   - **POSTGRES_URL_NON_POOLING** (ou equivalente sem `-pooler`) para migrations.
+
+3. Crie o arquivo `.env.local` na raiz (nunca commite este arquivo):
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+   Edite `.env.local` e preencha:
+
+   - `DATABASE_URL`: cole o valor de **POSTGRES_PRISMA_URL** (ou a URL pooled do Neon).
+   - `DIRECT_URL`: cole a URL **sem pooler** (para o Prisma rodar migrations).
+
+4. Gere o cliente Prisma e aplique as migrations:
+
+   ```bash
+   npm run db:generate
+   npm run db:migrate
+   ```
+
+5. (Opcional) Execute o seed para criar a senha inicial do admin:
+
+   ```bash
+   npm run db:seed
+   ```
+
+   A senha padrão em desenvolvimento é `admin123`, a menos que você defina `ADMIN_SEED_PASSWORD` no `.env.local`. Em produção, altere a senha ou use um hash definido por outro meio.
+
+## Desenvolvimento local
+
+1. Com `.env.local` configurado e migrations aplicadas:
+
+   ```bash
+   npm run dev
+   ```
+
+2. Acesse [http://localhost:3000](http://localhost:3000).
+
+3. **Admin**: Acesse [http://localhost:3000/admin](http://localhost:3000/admin). Será redirecionado para `/admin/login`. Use a senha definida pelo seed (ex.: `admin123`) ou a que você configurou.
+
+4. **Testar redirect**: Crie uma campanha no admin (ex.: slug `teste`, URL `https://www.google.com`) e acesse `http://localhost:3000/r/teste`. Deve redirecionar e registrar o acesso no dashboard.
+
+## Deploy na Vercel
+
+1. Conecte o repositório ao projeto na Vercel.
+
+2. Em **Project Settings → Environment Variables**, adicione:
+   - `DATABASE_URL`: connection string **pooled** do Neon (POSTGRES_PRISMA_URL ou equivalente).
+   - `DIRECT_URL`: connection string **sem pooler** (usada pelo Prisma Migrate no build, se configurado).
+
+3. No primeiro deploy, as migrations podem ser aplicadas em um step de build (ex.: `prisma migrate deploy`) ou manualmente a partir da sua máquina com `npm run db:migrate` apontando para o banco de produção.
+
+4. Após o deploy, execute o seed uma vez (localmente com `DATABASE_URL` de produção ou via script) para criar o registro de senha do admin, ou insira manualmente um registro em `AdminConfig` com um hash bcrypt da senha desejada.
+
+## Variáveis de ambiente
+
+| Variável            | Descrição                                                                 | Obrigatório |
+|---------------------|---------------------------------------------------------------------------|-------------|
+| `DATABASE_URL`      | Connection string PostgreSQL **pooled** (uso em runtime)                 | Sim         |
+| `DIRECT_URL`        | Connection string PostgreSQL **sem pooler** (migrations)                  | Sim         |
+| `ADMIN_SEED_PASSWORD` | Senha usada pelo seed para criar o primeiro admin (apenas no seed)     | Não         |
+
+## Estrutura do projeto
+
+```
+app/
+  r/[slug]/route.ts       # Redirect 302 + tracker (cookie uid, log, redirect)
+  admin/
+    layout.tsx            # Layout raiz do admin
+    login/page.tsx        # Página de login (senha única)
+    (protected)/
+      layout.tsx          # Proteção por sessão + navegação
+      page.tsx            # Dashboard (visão geral)
+      campaigns/          # Listagem, nova, editar campanha
+      reports/
+        campaign/[id]/    # Relatório por campanha (id "404" = acessos 404)
+        user/[id]/        # Relatório por anonymous_id
+  api/
+    admin/login/          # POST senha → sessão
+    admin/logout/         # POST → limpa sessão e redireciona
+lib/
+  db.ts                   # Prisma client singleton
+  auth.ts                 # Sessão, hash e validação de senha
+  redirect.ts             # Resolução slug → URL destino (campanha/404/Google)
+prisma/
+  schema.prisma           # Modelos Campaign, Access, AdminConfig
+  migrations/             # Migrations SQL
+  seed.ts                 # Cria primeiro AdminConfig (senha padrão dev)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Banco de dados
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Campaign**: slug (único), URL de redirecionamento, status (OPEN/CLOSED), metadados opcionais.
+- **Access**: cada acesso com campaignId (ou null para 404), anonymousId, IP, user-agent, referer, requestedSlug (para 404).
+- **AdminConfig**: um registro com hash da senha do admin.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Migrations: `npm run db:migrate` (dev) ou `npx prisma migrate deploy` (produção).  
+Seed: `npm run db:seed`.  
+Prisma Studio: `npm run db:studio` para inspecionar dados.
 
-## Learn More
+## Segurança
 
-To learn more about Next.js, take a look at the following resources:
+- Nunca commite `.env.local` nem credenciais no repositório.
+- A área `/admin` (exceto `/admin/login`) é protegida por cookie de sessão. A senha é armazenada apenas em hash (bcrypt) na tabela `AdminConfig`.
+- Troque a senha padrão do seed em produção e, se possível, rotacione a connection string do banco após qualquer exposição.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Licença
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Privado / uso interno.

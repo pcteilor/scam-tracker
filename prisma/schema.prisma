@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum CampaignStatus {
+  OPEN
+  CLOSED
+}
+
+model Campaign {
+  id             String         @id @default(cuid())
+  slug           String         @unique
+  redirectUrl    String
+  status         CampaignStatus @default(OPEN)
+  metaTitle      String?
+  metaDescription String?
+  ogImage        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  accesses       Access[]
+}
+
+model Access {
+  id           String    @id @default(cuid())
+  campaignId   String?
+  requestedSlug String?  // slug tentado quando campaignId null (404)
+  anonymousId  String
+  ip           String?
+  userAgent    String?
+  referer      String?
+  createdAt    DateTime @default(now())
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+}
+
+model AdminConfig {
+  id           String   @id @default(cuid())
+  passwordHash String
+}
