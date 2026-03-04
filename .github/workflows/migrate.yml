@@ -1,0 +1,30 @@
+# Roda migrações Prisma no banco Neon (útil quando a porta 5432 está bloqueada na sua rede).
+# Uso: Actions → Migrate database → Run workflow (ou disparar pelo push em main).
+name: Migrate database
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "prisma/migrations/**"
+      - "prisma/schema.prisma"
+      - ".github/workflows/migrate.yml"
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Run migrations
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma migrate deploy

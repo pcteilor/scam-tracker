@@ -22,10 +22,18 @@ export async function POST(request: NextRequest) {
 
     await setAdminSession();
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (err) {
+    const ex = err instanceof Error ? err : new Error(String(err));
+    const isDbUnreachable =
+      ex.name === "PrismaClientInitializationError" ||
+      (typeof ex.message === "string" && ex.message.includes("Can't reach database server"));
     return NextResponse.json(
-      { error: "Erro no servidor" },
-      { status: 500 }
+      {
+        error: isDbUnreachable
+          ? "Banco de dados inacessível. Verifique a conexão (Neon, rede, firewall) e se as migrations e o seed foram executados."
+          : "Erro no servidor",
+      },
+      { status: isDbUnreachable ? 503 : 500 }
     );
   }
 }

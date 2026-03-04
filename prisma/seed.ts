@@ -1,7 +1,11 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { PrismaClient } from "../generated/prisma/client";
+import { PrismaNeonHttp } from "@prisma/adapter-neon";
 import * as bcrypt from "bcrypt";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL!;
+const adapter = new PrismaNeonHttp(connectionString, { fullResults: true });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const defaultPassword = process.env.ADMIN_SEED_PASSWORD ?? "admin123";

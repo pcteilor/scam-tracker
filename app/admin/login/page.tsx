@@ -40,8 +40,9 @@ export default function AdminLoginPage() {
           Acesso administrativo
         </h1>
         <form onSubmit={handleSubmit}>
-          <label className="mb-2 block text-sm text-gray-700">Senha</label>
+          <label htmlFor="admin-password" className="mb-2 block text-sm text-gray-700">Senha</label>
           <input
+            id="admin-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

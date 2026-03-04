@@ -12,7 +12,7 @@ Sistema de redirecionamento com rastreamento de acessos, perfis anonimizados e p
 
 ## Requisitos
 
-- Node.js 18+
+- Node.js 20.19+ (recomendado 22.x)
 - Conta [Neon](https://neon.tech) (ou banco Postgres com connection string)
 
 ## Configuração
@@ -38,10 +38,9 @@ Sistema de redirecionamento com rastreamento de acessos, perfis anonimizados e p
    - `DATABASE_URL`: cole o valor de **POSTGRES_PRISMA_URL** (ou a URL pooled do Neon).
    - `DIRECT_URL`: cole a URL **sem pooler** (para o Prisma rodar migrations).
 
-4. Gere o cliente Prisma e aplique as migrations:
+4. Gere o cliente Prisma e aplique as migrations (o `postinstall` já roda `prisma generate`; para migrations use):
 
    ```bash
-   npm run db:generate
    npm run db:migrate
    ```
 
@@ -67,17 +66,25 @@ Sistema de redirecionamento com rastreamento de acessos, perfis anonimizados e p
 
 4. **Testar redirect**: Crie uma campanha no admin (ex.: slug `teste`, URL `https://www.google.com`) e acesse `http://localhost:3000/r/teste`. Deve redirecionar e registrar o acesso no dashboard.
 
-## Deploy na Vercel
+5. **Teste de conexão**: GET [http://localhost:3000/api/test-db](http://localhost:3000/api/test-db) — retorna `{ "ok": true, "method": "neon-http" }` se o banco estiver acessível.
+
+6. **Testes e2e (Playwright)**: `npm run test:e2e` (sobe o dev server e roda os testes). `npm run test:e2e:ui` abre a interface do Playwright.
+
+## Deploy na Vercel (Prisma 7 + Neon HTTP)
+
+O projeto usa **Prisma 7** com o adapter **Neon HTTP**: a conexão com o Neon é feita por **HTTPS** (porta 443), não por TCP 5432, o que funciona em redes que bloqueiam PostgreSQL.
 
 1. Conecte o repositório ao projeto na Vercel.
 
 2. Em **Project Settings → Environment Variables**, adicione:
-   - `DATABASE_URL`: connection string **pooled** do Neon (POSTGRES_PRISMA_URL ou equivalente).
-   - `DIRECT_URL`: connection string **sem pooler** (usada pelo Prisma Migrate no build, se configurado).
+   - **`DATABASE_URL`**: connection string **pooled** do Neon (Recommended ou POSTGRES_PRISMA_URL).
+   - **`DIRECT_URL`**: connection string **sem pooler** (DATABASE_URL_UNPOOLED ou POSTGRES_URL_NON_POOLING).
 
-3. No primeiro deploy, as migrations podem ser aplicadas em um step de build (ex.: `prisma migrate deploy`) ou manualmente a partir da sua máquina com `npm run db:migrate` apontando para o banco de produção.
+3. O comando `postinstall` roda `prisma generate` após `npm install`; o build usa o cliente gerado. Não é obrigatório rodar migrations no build.
 
-4. Após o deploy, execute o seed uma vez (localmente com `DATABASE_URL` de produção ou via script) para criar o registro de senha do admin, ou insira manualmente um registro em `AdminConfig` com um hash bcrypt da senha desejada.
+4. **Uma vez**: aplique as migrations no banco de produção com `npx prisma migrate deploy` (na sua máquina com env de produção). Depois rode `npm run db:seed` para criar o admin (senha padrão `admin123`).
+
+Detalhes e checklist: **[docs/VERCEL.md](docs/VERCEL.md)**.
 
 ## Variáveis de ambiente
 
